@@ -13,7 +13,7 @@ enum ExecutionState {
 
 impl Default for ExecutionState {
     fn default() -> Self {
-        ExecutionState::Running
+        ExecutionState::Init
     }
 }
 
@@ -102,5 +102,4 @@ impl StateManager {
         self.error = Some(error.to_string());
         self.update_state_data();
     }
-
 }

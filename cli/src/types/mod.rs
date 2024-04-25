@@ -15,4 +15,4 @@ use composer_primitives::{
     result, BuildDirectory, Exception, OutputDirectory, SourceFiles,
 };
 use echo_library::Composer;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};

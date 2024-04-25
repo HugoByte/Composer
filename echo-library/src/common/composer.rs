@@ -153,7 +153,12 @@ impl Composer {
 }
 
 impl Composer {
-    pub fn compile(&self, module: &str, files: &SourceFiles) -> Result<FrozenModule, Error> {
+    pub fn compile(
+        &self,
+        module: &str,
+        files: &SourceFiles,
+        loader: &mut HashMap<String, FrozenModule>,
+    ) -> Result<FrozenModule, Error> {
         let ast: AstModule = AstModule::parse_file(
             files
                 .files()
@@ -173,16 +178,14 @@ impl Composer {
         )
         .map_err(|err| Error::msg(format!("Error parsing file: {}", err)))?;
 
-        let mut loads = Vec::new();
-
         for load in ast.loads() {
-            loads.push((
-                load.module_id.to_owned(),
-                Self::compile(self, load.module_id, files)?,
-            ));
+            if loader.get(load.module_id).is_none() {
+                let frozen_module = Self::compile(self, load.module_id, files, loader)?;
+                loader.insert(load.module_id.to_owned(), frozen_module);
+            };
         }
 
-        let modules = loads.iter().map(|(a, b)| (a.as_str(), b)).collect();
+        let modules = loader.iter().map(|(a, b)| (a.as_str(), b)).collect();
         let loader = ReturnFileLoader { modules: &modules };
 
         // We build our globals by adding some functions we wrote
@@ -220,7 +223,7 @@ impl Composer {
             result.map_err(|err| Error::msg(format!("Evaluation error: {}", err)))?;
         }
 
-        if self.workflows.borrow().is_empty(){
+        if self.workflows.borrow().is_empty() {
             return Err(Error::msg("Empty workflow detected!!!"));
         }
         Ok(module.freeze()?)

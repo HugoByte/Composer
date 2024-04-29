@@ -140,13 +140,13 @@ macro_rules! impl_concat_setter {
         $input:ident
     ) => {
         impl $name {
-            pub fn setter(&mut self, val: Value) {
-                let val: Vec<Value> = serde_json::from_value(val).unwrap();
-                let res = join_hashmap(
-                    serde_json::from_value(val[0].to_owned()).unwrap(),
-                    serde_json::from_value(val[1].to_owned()).unwrap(),
+            pub fn setter(&mut self, value: Value) {
+                let value: Vec<Value> = serde_json::from_value(value).unwrap();
+                let response = join_hashmap(
+                    serde_json::from_value(value[0].to_owned()).unwrap(),
+                    serde_json::from_value(value[1].to_owned()).unwrap(),
                 );
-                self.input.$input = res;
+                self.input.$input = response;
             }
         }
     };

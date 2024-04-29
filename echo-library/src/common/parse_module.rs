@@ -422,15 +422,15 @@ fn get_workflow_nodes_and_edges_code(workflow: &Workflow) -> Result<String, Erro
     Ok(format!(
         "{}\n{}\n
 
-for (i, val) in prev_output.iter().enumerate() {{     
-    let mut node = workflow.get_task_as_mut(i);
+for (index, val) in prev_output.iter().enumerate() {{     
+    let mut node = workflow.get_task_as_mut(index);
     node.set_result_output(val.clone());
     let action_name = node.get_action_name();
-    workflow.state_manager.update_restore_success(&action_name, i as isize, val.clone())
+    workflow.state_manager.update_restore_success(&action_name, index as isize, val.clone())
 }}
 
-for i in prev_output.len()..workflow.node_count() {{
-    workflow.run(i)?;
+for index in prev_output.len()..workflow.node_count() {{
+    workflow.run(index)?;
 }}
 
 let len = workflow.node_count();

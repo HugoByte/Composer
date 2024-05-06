@@ -27,7 +27,7 @@ itertools = "0.12.1"
 walkdir = "2"
 anyhow = "1.0.65"
 echo-library = "0.0.3"
-composer-primitives = "0.0.1"
+composer-primitives = "0.0.2"
 sys-info = "0.9.1"
 
 [dependencies.clap]

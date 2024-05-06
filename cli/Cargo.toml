@@ -4,6 +4,8 @@ authors.workspace = true
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
+license = "Apache-2.0"
+description = "composer is tool to build workflow using echo config files"
 
 [package.metadata.wix]
 upgrade-guid = "2242B0E7-4997-48B2-BAC8-DEEAC0E4AE70"

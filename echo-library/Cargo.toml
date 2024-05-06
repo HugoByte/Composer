@@ -1,6 +1,6 @@
 [package]
 name = "echo-library"
-version = "0.0.3"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license = "Apache-2.0"
@@ -17,5 +17,5 @@ thiserror = "1.0.50"
 convert_case = "0.6.0"
 itertools = "0.12.1"
 walkdir = "2"
-composer-primitives = "0.0.2"
+composer-primitives = "0.0.3"
 rayon = "1.8.1"

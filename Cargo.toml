@@ -2,7 +2,7 @@
 authors = ["HugoByte", "The HugoByte Team <hello@hugobyte.com>"]
 edition = "2021"
 repository = "https://github.com/hugobyte/composer.git"
-version = "0.0.2"
+version = "0.0.5"
 
 # Config for 'cargo dist'
 [workspace.metadata.dist]

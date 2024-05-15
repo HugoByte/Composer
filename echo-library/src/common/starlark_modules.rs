@@ -179,6 +179,7 @@ pub fn starlark_workflow_module(builder: &mut GlobalsBuilder) {
                     RustType::HashMap(_, _) => {}
                     RustType::List(_) => {}
                     RustType::Tuple(_, _) => {}
+                    RustType::Struct(_) => {}
                     _ => {
                         return Err(anyhow!("Unsupported input type for default value"));
                     }

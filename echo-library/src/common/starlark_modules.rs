@@ -30,10 +30,12 @@ pub fn starlark_workflow_module(builder: &mut GlobalsBuilder) {
     ) -> anyhow::Result<Task> {
         if kind == "openwhisk" || kind == "polkadot" {
             if attributes.is_none() {
-                return Err(anyhow!("Attributes are mandatory for kind: openwhisk or polkadot"));
+                return Err(anyhow!(
+                    "Attributes are mandatory for kind: openwhisk or polkadot"
+                ));
             }
         }
-        
+
         let mut input_arguments: Vec<Input> = serde_json::from_str(&input_arguments.to_json()?)
             .map_err(|err| anyhow!("Failed to parse input arguments: {}", err))?;
 
@@ -174,8 +176,12 @@ pub fn starlark_workflow_module(builder: &mut GlobalsBuilder) {
                             return Err(anyhow!("Value must be either true or false"));
                         }
                     }
-
-                    _ => return Err(anyhow!("Unsupported input type for default value")),
+                    RustType::HashMap(_, _) => {}
+                    RustType::List(_) => {}
+                    RustType::Tuple(_, _) => {}
+                    _ => {
+                        return Err(anyhow!("Unsupported input type for default value"));
+                    }
                 }
 
                 Some(value_str)

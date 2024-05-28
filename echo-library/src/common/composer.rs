@@ -149,8 +149,9 @@ impl Composer {
         let dependencies = generate_cargo_toml_dependencies(workflow);
         writeln!(cargo_toml, "{dependencies}")
             .expect("could not able to add dependencies to the Cargo.toml");
-
+        
         Ok(temp_dir)
+        
     }
 }
 
@@ -292,6 +293,8 @@ impl Composer {
                 fs::remove_dir_all(temp_dir).map_err(|err| {
                     anyhow!("{}: Failed to remove temp dir: {}", workflow.1.name, err)
                 })?;
+
+                fs::remove_dir_all(build_path)?;
 
                 Ok(())
             })

@@ -1,5 +1,83 @@
 use super::*;
 use anyhow::anyhow;
+
+fn validate_value(value: &serde_json::Value, expected_type: &RustType) -> anyhow::Result<()> {
+    match expected_type {
+        RustType::String => {
+            if !value.is_string() {
+                return Err(anyhow!("Value must be a string"));
+            }
+        }
+        RustType::Int => {
+            if !value.is_i64() {
+                return Err(anyhow!("Value must be an integer"));
+            }
+        }
+        RustType::Float => {
+            if !value.is_f64() {
+                return Err(anyhow!("Value must be a float"));
+            }
+        }
+        RustType::Uint => {
+            if !value.is_u64() {
+                return Err(anyhow!("Value must be a positive integer"));
+            }
+        }
+        RustType::Boolean => {
+            if !value.is_boolean() {
+                return Err(anyhow!("Value must be a boolean"));
+            }
+        }
+
+        RustType::HashMap(key_type, value_type) => {
+            if let Some(map) = value.as_object() {
+                for (key, val) in map.iter() {
+                    validate_value(val, value_type)?;
+                }
+            } else {
+                return Err(anyhow!("Value must be a JSON object"));
+            }
+        }
+
+        RustType::List(item_type) => {
+            let parsed_array = value
+                .as_array()
+                .ok_or_else(|| anyhow!("Value must be a JSON array"))?;
+
+            for element in parsed_array.iter() {
+                validate_value(element, item_type)?;
+            }
+        }
+
+        RustType::Tuple(key_type, value_type) => {
+            let parsed_tuple = value
+                .as_array()
+                .ok_or_else(|| anyhow!("Value must be a JSON tuple with two elements"))?;
+
+            if parsed_tuple.len() != 2 {
+                return Err(anyhow!("Tuple must have exactly two elements"));
+            }
+
+            // Pattern matching for key and value types
+            match (&parsed_tuple[0], &parsed_tuple[1]) {
+                (serde_json::Value::String(key), value) => validate_value(value, value_type)?,
+                (serde_json::Value::Number(number), value) if number.is_i64() => {
+                    validate_value(value, value_type)?
+                }
+                (serde_json::Value::Number(number), value) if number.is_f64() => {
+                    validate_value(value, value_type)?
+                }
+                (serde_json::Value::Bool(bool_value), value) => validate_value(value, value_type)?,
+                _ => return Err(anyhow!("Unsupported tuple element types")),
+            }
+        }
+
+        _ => return Err(anyhow!("Unsupported input type for default value")),
+    }
+
+    Ok(())
+}
+
 #[allow(clippy::type_complexity)]
 #[starlark_module]
 pub fn starlark_workflow_module(builder: &mut GlobalsBuilder) {
@@ -136,6 +214,7 @@ pub fn starlark_workflow_module(builder: &mut GlobalsBuilder) {
     ///
     /// * A Result containing the input object of `Input` type
     ///
+
     fn argument(
         name: String,
         input_type: Value,
@@ -150,233 +229,9 @@ pub fn starlark_workflow_module(builder: &mut GlobalsBuilder) {
                     .to_json()
                     .map_err(|err| anyhow!("Failed to parse default value: {}", err))?;
 
-                match input_type {
-                    RustType::String => {
-                        if !value_str.contains("\"") {
-                            return Err(anyhow!("Value must be in String type"));
-                        }
-                    }
-                    RustType::Int => {
-                        if value_str.parse::<i32>().is_err() {
-                            return Err(anyhow!("Value must be an integer"));
-                        }
-                    }
-                    RustType::Float => {
-                        if value_str.parse::<f32>().is_err() {
-                            return Err(anyhow!("Value must be a float"));
-                        }
-                    }
-                    RustType::Uint => {
-                        if value_str.parse::<u32>().is_err() {
-                            return Err(anyhow!("Value must be a positive integer"));
-                        }
-                    }
-                    RustType::Boolean => {
-                        if value_str != "true" && value_str != "false" {
-                            return Err(anyhow!("Value must be either true or false"));
-                        }
-                    }
-                    RustType::HashMap(ref key_type, ref value_type) => {
-                        let parsed_map = serde_json::from_str::<
-                            serde_json::Map<String, serde_json::Value>,
-                        >(&value_str)
-                        .map_err(|_| {
-                            anyhow!("Value must be a valid JSON object for HashMap type")
-                        })?;
-
-                        // Iterate through each key-value pair in the map and validate types
-                        for (key, value) in parsed_map.iter() {
-                            // Validate the key
-                            match **key_type {
-                                RustType::String => {
-                                    if !key.parse::<String>().is_ok() {
-                                        return Err(anyhow!(
-                                            "Key must be a string for HashMap(String, _)"
-                                        ));
-                                    }
-                                }
-                                RustType::Int => {
-                                    if key.parse::<i64>().is_err() {
-                                        return Err(anyhow!(
-                                            "Key must be an integer for HashMap(Int, _)"
-                                        ));
-                                    }
-                                }
-                                RustType::Uint => {
-                                    if key.parse::<u64>().is_err() {
-                                        return Err(anyhow!(
-                                            "Key must be an unsigned integer for HashMap(Uint, _)"
-                                        ));
-                                    }
-                                }
-                                RustType::Float => {
-                                    if !value.is_f64() {
-                                        return Err(anyhow!(
-                                            "Key must be a float for HashMap(Float, _)"
-                                        ));
-                                    }
-                                }
-                                _ => return Err(anyhow!("Unsupported key type for HashMap")),
-                            }
-
-                            // Validate the value
-                            match **value_type {
-                                RustType::String => {
-                                    if !value.is_string() {
-                                        return Err(anyhow!(
-                                            "Value must be a string for HashMap(_, String)"
-                                        ));
-                                    }
-                                }
-                                RustType::Int => {
-                                    if !value.is_i64() {
-                                        return Err(anyhow!(
-                                            "Value must be an integer for HashMap(_, Int)"
-                                        ));
-                                    }
-                                }
-                                RustType::Uint => {
-                                    if !value.is_u64() {
-                                        return Err(anyhow!("Value must be an unsigned integer for HashMap(_, Uint)"));
-                                    }
-                                }
-                                RustType::Float => {
-                                    if !value.is_f64() {
-                                        return Err(anyhow!(
-                                            "Value must be a float for HashMap(_, Float)"
-                                        ));
-                                    }
-                                }
-                                _ => return Err(anyhow!("Unsupported value type for HashMap")),
-                            }
-                        }
-                    }
-                    RustType::List(ref item_type) => {
-                        let parsed_array = serde_json::from_str::<Vec<serde_json::Value>>(
-                            &value_str,
-                        )
-                        .map_err(|_| anyhow!("Value must be a valid JSON array for List type"))?;
-
-                        // Check if each element in the array matches the expected item type
-                        for element in parsed_array.iter() {
-                            match **item_type {
-                                RustType::String => {
-                                    if !element.is_string() {
-                                        return Err(anyhow!(
-                                            "List elements must be strings for List(String)"
-                                        ));
-                                    }
-                                }
-                                RustType::Int => {
-                                    if !element.is_i64() && !element.is_i64() {
-                                        return Err(anyhow!(
-                                            "List elements must be integers for List(Int)"
-                                        ));
-                                    }
-                                }
-                                RustType::Uint => {
-                                    if !element.is_f64() && !element.is_u64() {
-                                        return Err(anyhow!(
-                                            "List elements must be integers for List(Uint)"
-                                        ));
-                                    }
-                                }
-                                RustType::Float => {
-                                    if !element.is_i64() && !element.is_f64() {
-                                        return Err(anyhow!(
-                                            "List elements must be integers for List(Float)"
-                                        ));
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    RustType::Tuple(ref key_type, ref value_type) => {
-                        // Parse the value_str as a JSON array
-                        let parsed_tuple = serde_json::from_str::<Vec<serde_json::Value>>(
-                            &value_str,
-                        )
-                        .map_err(|_| anyhow!("Value must be a valid JSON tuple for Tuple type"))?;
-
-                        // Ensure the tuple has exactly two elements
-                        if parsed_tuple.len() != 2 {
-                            return Err(anyhow!("Tuple must have exactly two elements"));
-                        }
-
-                        // Validate the first element of the tuple
-                        match **key_type {
-                            RustType::String => {
-                                if !parsed_tuple[0].is_string() {
-                                    return Err(anyhow!(
-                                        "First element of the tuple must be a string"
-                                    ));
-                                }
-                            }
-                            RustType::Int => {
-                                if !parsed_tuple[0].is_i64() {
-                                    return Err(anyhow!(
-                                        "First element of the tuple must be an integer"
-                                    ));
-                                }
-                            }
-                            RustType::Uint => {
-                                if !parsed_tuple[0].is_u64() {
-                                    return Err(anyhow!(
-                                        "First element of the tuple must be an unsigned integer"
-                                    ));
-                                }
-                            }
-                            RustType::Float => {
-                                if !parsed_tuple[0].is_f64() {
-                                    return Err(anyhow!(
-                                        "First element of the tuple must be a float"
-                                    ));
-                                }
-                            }
-
-                            _ => {}
-                        }
-
-                        // Validate the second element of the tuple
-                        match **value_type {
-                            RustType::String => {
-                                if !parsed_tuple[1].is_string() {
-                                    return Err(anyhow!(
-                                        "Second element of the tuple must be a string"
-                                    ));
-                                }
-                            }
-                            RustType::Int => {
-                                if !parsed_tuple[1].is_i64() {
-                                    return Err(anyhow!(
-                                        "Second element of the tuple must be an integer"
-                                    ));
-                                }
-                            }
-                            RustType::Uint => {
-                                if !parsed_tuple[1].is_u64() {
-                                    return Err(anyhow!(
-                                        "Second element of the tuple must be an unsigned integer"
-                                    ));
-                                }
-                            }
-                            RustType::Float => {
-                                if !parsed_tuple[1].is_f64() {
-                                    return Err(anyhow!(
-                                        "Second element of the tuple must be a float"
-                                    ));
-                                }
-                            }
-
-                            _ => {}
-                        }
-                    }
-                    RustType::Struct(_) => {}
-                    _ => {
-                        return Err(anyhow!("Unsupported input type for default value"));
-                    }
-                }
+                let parsed_value = serde_json::from_str(&value_str)?;
+                validate_value(&parsed_value, &input_type)?;
+                // validate_value(&serde_json::from_str(&value_str)?, &input_type)?;
 
                 Some(value_str)
             }

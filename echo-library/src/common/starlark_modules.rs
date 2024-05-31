@@ -29,6 +29,14 @@ fn validate_value(value: &serde_json::Value, expected_type: &RustType) -> anyhow
             }
         }
 
+        RustType::Struct(_) => {}
+
+        RustType::Value => {
+            if !value.is_object() {
+                return Err(anyhow!("value must be a Json Object"));
+            }
+        }
+
         RustType::HashMap(key_type, value_type) => {
             if let Some(map) = value.as_object() {
                 for (key, val) in map.iter() {
@@ -231,7 +239,6 @@ pub fn starlark_workflow_module(builder: &mut GlobalsBuilder) {
 
                 let parsed_value = serde_json::from_str(&value_str)?;
                 validate_value(&parsed_value, &input_type)?;
-                // validate_value(&serde_json::from_str(&value_str)?, &input_type)?;
 
                 Some(value_str)
             }

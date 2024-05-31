@@ -1,5 +1,91 @@
 use super::*;
 use anyhow::anyhow;
+
+fn validate_value(value: &serde_json::Value, expected_type: &RustType) -> anyhow::Result<()> {
+    match expected_type {
+        RustType::String => {
+            if !value.is_string() {
+                return Err(anyhow!("Value must be a string"));
+            }
+        }
+        RustType::Int => {
+            if !value.is_i64() {
+                return Err(anyhow!("Value must be an integer"));
+            }
+        }
+        RustType::Float => {
+            if !value.is_f64() {
+                return Err(anyhow!("Value must be a float"));
+            }
+        }
+        RustType::Uint => {
+            if !value.is_u64() {
+                return Err(anyhow!("Value must be a positive integer"));
+            }
+        }
+        RustType::Boolean => {
+            if !value.is_boolean() {
+                return Err(anyhow!("Value must be a boolean"));
+            }
+        }
+
+        RustType::Struct(_) => {}
+
+        RustType::Value => {
+            if !value.is_object() {
+                return Err(anyhow!("value must be a Json Object"));
+            }
+        }
+
+        RustType::HashMap(key_type, value_type) => {
+            if let Some(map) = value.as_object() {
+                for (key, val) in map.iter() {
+                    validate_value(val, value_type)?;
+                }
+            } else {
+                return Err(anyhow!("Value must be a JSON object"));
+            }
+        }
+
+        RustType::List(item_type) => {
+            let parsed_array = value
+                .as_array()
+                .ok_or_else(|| anyhow!("Value must be a JSON array"))?;
+
+            for element in parsed_array.iter() {
+                validate_value(element, item_type)?;
+            }
+        }
+
+        RustType::Tuple(key_type, value_type) => {
+            let parsed_tuple = value
+                .as_array()
+                .ok_or_else(|| anyhow!("Value must be a JSON tuple with two elements"))?;
+
+            if parsed_tuple.len() != 2 {
+                return Err(anyhow!("Tuple must have exactly two elements"));
+            }
+
+            // Pattern matching for key and value types
+            match (&parsed_tuple[0], &parsed_tuple[1]) {
+                (serde_json::Value::String(key), value) => validate_value(value, value_type)?,
+                (serde_json::Value::Number(number), value) if number.is_i64() => {
+                    validate_value(value, value_type)?
+                }
+                (serde_json::Value::Number(number), value) if number.is_f64() => {
+                    validate_value(value, value_type)?
+                }
+                (serde_json::Value::Bool(bool_value), value) => validate_value(value, value_type)?,
+                _ => return Err(anyhow!("Unsupported tuple element types")),
+            }
+        }
+
+        _ => return Err(anyhow!("Unsupported input type for default value")),
+    }
+
+    Ok(())
+}
+
 #[allow(clippy::type_complexity)]
 #[starlark_module]
 pub fn starlark_workflow_module(builder: &mut GlobalsBuilder) {
@@ -136,6 +222,7 @@ pub fn starlark_workflow_module(builder: &mut GlobalsBuilder) {
     ///
     /// * A Result containing the input object of `Input` type
     ///
+
     fn argument(
         name: String,
         input_type: Value,
@@ -150,40 +237,8 @@ pub fn starlark_workflow_module(builder: &mut GlobalsBuilder) {
                     .to_json()
                     .map_err(|err| anyhow!("Failed to parse default value: {}", err))?;
 
-                match input_type {
-                    RustType::String => {
-                        if !value_str.contains("\"") {
-                            return Err(anyhow!("Value must be in String type"));
-                        }
-                    }
-                    RustType::Int => {
-                        if value_str.parse::<i32>().is_err() {
-                            return Err(anyhow!("Value must be an integer"));
-                        }
-                    }
-                    RustType::Float => {
-                        if value_str.parse::<f32>().is_err() {
-                            return Err(anyhow!("Value must be a float"));
-                        }
-                    }
-                    RustType::Uint => {
-                        if value_str.parse::<u32>().is_err() {
-                            return Err(anyhow!("Value must be a positive integer"));
-                        }
-                    }
-                    RustType::Boolean => {
-                        if value_str != "true" && value_str != "false" {
-                            return Err(anyhow!("Value must be either true or false"));
-                        }
-                    }
-                    RustType::HashMap(_, _) => {}
-                    RustType::List(_) => {}
-                    RustType::Tuple(_, _) => {}
-                    RustType::Struct(_) => {}
-                    _ => {
-                        return Err(anyhow!("Unsupported input type for default value"));
-                    }
-                }
+                let parsed_value = serde_json::from_str(&value_str)?;
+                validate_value(&parsed_value, &input_type)?;
 
                 Some(value_str)
             }
